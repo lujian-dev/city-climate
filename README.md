@@ -12,6 +12,8 @@
 
 Open-Meteo 历史气象 API，逐日气温与降水，无需 API Key。
 <img width="2557" height="1376" alt="6615a01eda9f8ab28639b4a8177496d6" src="https://github.com/user-attachments/assets/228926d1-e5a8-4cc7-9732-712307a58c88" />
+<img width="2557" height="1375" alt="image" src="https://github.com/user-attachments/assets/d7febc78-e0b1-4788-ab7e-8d8a639ce934" />
+
 
 ## 主要功能
 
