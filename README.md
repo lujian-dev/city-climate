@@ -11,9 +11,8 @@
 ## 数据来源
 
 Open-Meteo 历史气象 API，逐日气温与降水，无需 API Key。
-<img width="2459" height="834" alt="image" src="https://github.com/user-attachments/assets/47e57b55-5ab5-4c3f-aa68-69d04ecd94c9" />
+<img width="2500" height="1250" alt="image" src="https://github.com/user-attachments/assets/3d0c2ab2-539f-4bf0-9b88-5f445af037a8" />
 
-<img width="2495" height="701" alt="image" src="https://github.com/user-attachments/assets/2fc95541-e107-4471-bb40-bc3ca09a078b" />
 
 *上图：指标卡与舒适天数排行；下图：完整指标明细*
 
