@@ -25,19 +25,25 @@ CITIES = {
 
 START = "2025-01-01"
 END = "2025-12-31"
-COMFORT_LOW = 12
-COMFORT_HIGH = 28
+
+# 温湿指数 THI 的舒适区间。THI 把温度与湿度合成一个「体感温度」，
+# 同样 28℃，广州的湿热和乌鲁木齐的干热在 THI 里差好几度。
+THI_LOW = 15
+THI_HIGH = 25
 
 
 @st.cache_data(ttl="24h", show_spinner=False)
 def fetch_city(name: str, lat: float, lon: float) -> pd.DataFrame:
-    """拉一座城市一整年的逐日气温与降水。参数进缓存键，换城市会自动重新拉。"""
+    """拉一座城市一整年的逐日气温、湿度与降水。参数进缓存键，换城市会自动重新拉。"""
     params = {
         "latitude": lat,
         "longitude": lon,
         "start_date": START,
         "end_date": END,
-        "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum",
+        "daily": (
+            "temperature_2m_max,temperature_2m_min,temperature_2m_mean,"
+            "precipitation_sum,relative_humidity_2m_mean"
+        ),
         "timezone": "auto",
     }
     url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(params)
@@ -51,6 +57,7 @@ def fetch_city(name: str, lat: float, lon: float) -> pd.DataFrame:
             "tmin": daily["temperature_2m_min"],
             "tmean": daily["temperature_2m_mean"],
             "precip": daily["precipitation_sum"],
+            "rh": daily["relative_humidity_2m_mean"],
         }
     )
     df["city"] = name
@@ -58,16 +65,18 @@ def fetch_city(name: str, lat: float, lon: float) -> pd.DataFrame:
 
 
 def load_data() -> pd.DataFrame:
-    """把各城市拼成一张长表，并算出「舒适日」。
+    """把各城市拼成一张长表，并算出温湿指数与「舒适日」。
 
-    这里故意不加缓存：它依赖 CITIES、COMFORT_LOW、COMFORT_HIGH 三个全局变量，
+    这里故意不加缓存：它依赖 CITIES、THI_LOW、THI_HIGH 这些全局变量，
     而缓存只认函数参数，改了这些变量缓存不会失效。真正贵的是网络请求，
     那部分交给 fetch_city 缓存，这段便宜的计算每次重跑就好。
     """
     frames = [fetch_city(name, lat, lon) for name, (lat, lon) in CITIES.items()]
     df = pd.concat(frames, ignore_index=True)
     df["month"] = df["date"].dt.month
-    df["comfort"] = df["tmean"].between(COMFORT_LOW, COMFORT_HIGH) & (df["precip"] < 1)
+    # 温湿指数：THI = T - 0.55 * (1 - RH) * (T - 14.4)，RH 取 0~1
+    df["thi"] = df["tmean"] - 0.55 * (1 - df["rh"] / 100) * (df["tmean"] - 14.4)
+    df["comfort"] = df["thi"].between(THI_LOW, THI_HIGH) & (df["precip"] < 1)
     df["big_range"] = (df["tmax"] - df["tmin"]) > 10
     return df
 
@@ -75,13 +84,14 @@ def load_data() -> pd.DataFrame:
 st.set_page_config(page_title="城市气候舒适度", page_icon="🌤", layout="wide")
 
 st.title("哪座城市的气候最舒服")
-st.caption(f"{START} 至 {END} 逐日气温与降水 · 数据来源 Open-Meteo")
+st.caption(f"{START} 至 {END} 逐日气温、湿度与降水 · 数据来源 Open-Meteo")
 
 with st.spinner(f"正在拉取 {len(CITIES)} 座城市一年的逐日数据，第一次会慢一点…"):
     df = load_data()
 
 summary = df.groupby("city").agg(
     舒适天数=("comfort", "sum"),
+    平均THI=("thi", "mean"),
     年均温=("tmean", "mean"),
     年降水=("precip", "sum"),
     高温天数=("tmax", lambda s: int((s >= 35).sum())),
@@ -105,7 +115,9 @@ with st.sidebar:
         list(summary.index),
         default=list(summary.index[:4]),
     )
-    st.caption(f"舒适日 = 日均温 {COMFORT_LOW}–{COMFORT_HIGH}℃ 且当天降水不足 1 毫米。")
+    st.caption(
+        f"舒适日 = 温湿指数 THI 在 {THI_LOW}–{THI_HIGH} 之间，且当天降水不足 1 毫米。"
+    )
     if st.button("重新拉取数据", width="stretch"):
         st.cache_data.clear()
         st.rerun()
@@ -136,6 +148,6 @@ with st.container(border=True):
 
 st.markdown(
     f"**一句话结论**：{best}全年有 {int(summary.iloc[0]['舒适天数'])} 天"
-    f"处在 {COMFORT_LOW}–{COMFORT_HIGH}℃ 且日降水不足 1 毫米，"
+    f"温湿指数落在 {THI_LOW}–{THI_HIGH} 之间且日降水不足 1 毫米，"
     f"占了 {summary.iloc[0]['舒适占比']:.0f}%。"
 )
